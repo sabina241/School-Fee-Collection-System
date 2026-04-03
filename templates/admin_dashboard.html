@@ -1,0 +1,276 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Admin Dashboard | EduPay Management</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://unpkg.com/lucide@latest"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <style>
+        body { font-family: 'Inter', sans-serif; }
+        .active-nav { @apply bg-slate-800 text-white shadow-lg; }
+    </style>
+</head>
+<body class="bg-slate-50 min-h-screen flex">
+
+    <aside class="w-72 bg-slate-900 text-slate-300 hidden md:flex flex-col sticky top-0 h-screen shadow-2xl">
+        <div class="p-8">
+            <div class="flex items-center gap-3 bg-slate-800/50 p-4 rounded-2xl border border-slate-700">
+                <div class="w-10 h-10 bg-indigo-500 rounded-xl flex items-center justify-center">
+                    <i data-lucide="shield-check" class="text-white w-6 h-6"></i>
+                </div>
+                <div>
+                    <h3 class="text-white font-bold text-sm leading-tight truncate">{{ admin_name }}</h3>
+                    <p class="text-slate-500 text-[10px] font-bold uppercase tracking-widest">Administrator</p>
+                </div>
+            </div>
+        </div>
+
+        <nav class="flex-1 px-4 space-y-2">
+            <button id="nav-overview" onclick="location.reload()" class="w-full flex items-center gap-3 px-4 py-3.5 rounded-xl active-nav font-semibold transition-all">
+                <i data-lucide="layout-dashboard" class="w-5 h-5"></i> Fee Overview
+            </button>
+            <button id="nav-students" onclick="showAllStudents()" class="w-full flex items-center gap-3 px-4 py-3.5 rounded-xl hover:bg-slate-800 hover:text-white transition-all text-slate-400">
+                <i data-lucide="users" class="w-5 h-5"></i> Manage Students
+            </button>
+        </nav>
+
+        <div class="p-4 border-t border-slate-800">
+            <a href="/logout/admin" class="flex items-center gap-3 px-4 py-3 rounded-xl text-rose-400 hover:bg-rose-400/10 transition-all">
+                <i data-lucide="log-out" class="w-5 h-5"></i> Sign Out
+            </a>
+        </div>
+    </aside>
+
+    <main class="flex-1 p-6 lg:p-10 overflow-y-auto">
+        <div class="flex flex-col md:flex-row md:items-center justify-between mb-8 gap-4">
+            <div>
+                <h1 id="pageTitle" class="text-3xl font-extrabold text-slate-900 tracking-tight">Admin Intelligence</h1>
+                <p id="pageSub" class="text-slate-500">Real-time financial and student data tracking.</p>
+            </div>
+
+            <div id="filterToolbar" class="flex items-center bg-white border border-slate-200 rounded-2xl p-1 shadow-sm">
+                <select id="statusFilter" onchange="applyFilters()" class="bg-transparent px-4 py-2 text-sm font-semibold text-slate-600 outline-none cursor-pointer">
+                    <option value="all">All Status</option>
+                    <option value="paid">Paid</option>
+                    <option value="unpaid">Unpaid</option>
+                    <option value="balance">Partial</option>
+                </select>
+                <div class="h-6 w-[1px] bg-slate-200 mx-1"></div>
+                <select id="deptFilter" onchange="applyFilters()" class="bg-transparent px-4 py-2 text-sm font-semibold text-slate-600 outline-none cursor-pointer">
+                    <option value="all">All Depts</option>
+                    {% for dept in departments %}
+                    <option value="{{ dept }}">{{ dept }}</option>
+                    {% endfor %}
+                </select>
+            </div>
+
+            <div id="studentToolbar" class="hidden flex items-center bg-white border border-slate-200 rounded-2xl p-1 shadow-sm">
+                <div class="flex items-center px-4 text-slate-400"><i data-lucide="filter" class="w-4 h-4"></i></div>
+                <select id="studentDeptFilter" onchange="filterStudentList()" class="bg-transparent pr-4 py-2 text-sm font-semibold text-slate-600 outline-none cursor-pointer">
+                    <option value="all">Filter by Department</option>
+                    {% for dept in departments %}
+                    <option value="{{ dept }}">{{ dept }}</option>
+                    {% endfor %}
+                </select>
+            </div>
+        </div>
+
+        <div id="graphicsSection" class="grid grid-cols-1 lg:grid-cols-3 gap-6 mb-10">
+            <div class="bg-white p-6 rounded-[2rem] shadow-sm border border-slate-200 flex flex-col items-center">
+                <h3 class="text-sm font-bold text-slate-400 uppercase tracking-widest mb-6 self-start">Revenue Health</h3>
+                <div class="relative w-full h-48">
+                    <canvas id="revenueDonut"></canvas>
+                </div>
+                <div class="mt-4 flex gap-4 text-xs font-bold">
+                    <div class="flex items-center gap-1 text-emerald-600"><span class="w-2 h-2 rounded-full bg-emerald-500"></span> Collected</div>
+                    <div class="flex items-center gap-1 text-rose-600"><span class="w-2 h-2 rounded-full bg-rose-500"></span> Pending</div>
+                </div>
+            </div>
+
+            <div class="lg:col-span-2 bg-white p-6 rounded-[2rem] shadow-sm border border-slate-200">
+                <h3 class="text-sm font-bold text-slate-400 uppercase tracking-widest mb-6">Collections by Department</h3>
+                <div class="relative w-full h-56">
+                    <canvas id="deptBarChart"></canvas>
+                </div>
+            </div>
+        </div>
+
+        <div class="bg-white rounded-[2rem] shadow-sm border border-slate-200 overflow-hidden">
+
+            <div id="feeTableSection" class="overflow-x-auto">
+                <table class="w-full text-left">
+                    <thead class="bg-slate-50 border-b border-slate-100">
+                        <tr>
+                            <th class="px-8 py-5 text-[10px] font-bold text-slate-400 uppercase tracking-widest">Student</th>
+                            <th class="px-8 py-5 text-[10px] font-bold text-slate-400 uppercase tracking-widest">Dept</th>
+                            <th class="px-8 py-5 text-[10px] font-bold text-slate-400 uppercase tracking-widest text-center">Total</th>
+                            <th class="px-8 py-5 text-[10px] font-bold text-slate-400 uppercase tracking-widest text-center">Balance</th>
+                            <th class="px-8 py-5 text-[10px] font-bold text-slate-400 uppercase tracking-widest text-right">Status</th>
+                        </tr>
+                    </thead>
+                    <tbody id="feesTable" class="divide-y divide-slate-50">
+                        {% for row in students %}
+                        <tr class="hover:bg-slate-50/50 transition" data-status="{{ row.status | lower }}" data-department="{{ row.department }}">
+                            <td class="px-8 py-5 font-bold text-slate-800">{{ row.name }}</td>
+                            <td class="px-8 py-5 text-sm text-slate-500 font-medium">{{ row.department }}</td>
+                            <td class="px-8 py-5 font-semibold text-slate-700 text-center">₹{{ row.total_fee }}</td>
+                            <td class="px-8 py-5 font-bold text-rose-500 text-center">₹{{ row.balance }}</td>
+                            <td class="px-8 py-5 text-right">
+                                <span class="px-3 py-1 rounded-full text-[10px] font-extrabold uppercase tracking-wider
+                                    {% if row.status|lower == 'paid' %}bg-emerald-100 text-emerald-600
+                                    {% elif row.status|lower == 'unpaid' %}bg-rose-100 text-rose-600
+                                    {% else %}bg-amber-100 text-amber-600{% endif %}">
+                                    {{ row.status }}
+                                </span>
+                            </td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+
+            <div id="studentTableSection" class="hidden overflow-x-auto">
+                <table class="w-full text-left">
+                    <thead class="bg-slate-50 border-b border-slate-100">
+                        <tr>
+                            <th class="px-8 py-5 text-[10px] font-bold text-slate-400 uppercase tracking-widest">Name</th>
+                            <th class="px-8 py-5 text-[10px] font-bold text-slate-400 uppercase tracking-widest">Username</th>
+                            <th class="px-8 py-5 text-[10px] font-bold text-slate-400 uppercase tracking-widest">Department</th>
+                            <th class="px-8 py-5 text-[10px] font-bold text-slate-400 uppercase tracking-widest text-right">Actions</th>
+                        </tr>
+                    </thead>
+                    <tbody id="studentsBody" class="divide-y divide-slate-50"></tbody>
+                </table>
+            </div>
+        </div>
+    </main>
+
+    <script>
+        lucide.createIcons();
+        let revenueChart, deptChart;
+
+        // FILTER FOR FEE OVERVIEW
+        function applyFilters() {
+            const status = document.getElementById("statusFilter").value;
+            const dept = document.getElementById("deptFilter").value;
+            const rows = document.querySelectorAll("#feesTable tr");
+
+            rows.forEach(row => {
+                const rowStatus = row.dataset.status.toLowerCase();
+                const rowDept = row.dataset.department;
+                const statusMatch = status === "all" || (status === "balance" ? rowStatus === "partial" : rowStatus === status);
+                const deptMatch = dept === "all" || rowDept === dept;
+                row.style.display = (statusMatch && deptMatch) ? "" : "none";
+            });
+        }
+
+        // FILTER FOR MANAGE STUDENTS VIEW
+        function filterStudentList() {
+            const dept = document.getElementById("studentDeptFilter").value;
+            const rows = document.querySelectorAll("#studentsBody tr");
+
+            rows.forEach(row => {
+                const rowDept = row.getAttribute('data-dept');
+                row.style.display = (dept === "all" || rowDept === dept) ? "" : "none";
+            });
+        }
+
+        async function updateCharts() {
+            try {
+                const res = await fetch("/admin/api/stats");
+                const data = await res.json();
+                const ctxRev = document.getElementById('revenueDonut').getContext('2d');
+                if (revenueChart) revenueChart.destroy();
+                revenueChart = new Chart(ctxRev, {
+                    type: 'doughnut',
+                    data: {
+                        labels: ['Collected', 'Pending'],
+                        datasets: [{
+                            data: [data.revenue.paid, data.revenue.pending],
+                            backgroundColor: ['#10b981', '#f43f5e'],
+                            hoverOffset: 12,
+                            borderWidth: 0
+                        }]
+                    },
+                    options: { cutout: '75%', plugins: { legend: { display: false } }, maintainAspectRatio: false }
+                });
+
+                const ctxDept = document.getElementById('deptBarChart').getContext('2d');
+                if (deptChart) deptChart.destroy();
+                deptChart = new Chart(ctxDept, {
+                    type: 'bar',
+                    data: {
+                        labels: Object.keys(data.departments),
+                        datasets: [{
+                            label: 'Collected Amount (₹)',
+                            data: Object.values(data.departments),
+                            backgroundColor: '#6366f1',
+                            borderRadius: 12,
+                            maxBarThickness: 40
+                        }]
+                    },
+                    options: {
+                        responsive: true,
+                        maintainAspectRatio: false,
+                        scales: {
+                            y: { beginAtZero: true, grid: { borderDash: [5, 5], color: '#e2e8f0' } },
+                            x: { grid: { display: false } }
+                        },
+                        plugins: { legend: { display: false } }
+                    }
+                });
+            } catch (err) { console.error(err); }
+        }
+
+        async function showAllStudents() {
+            // Switch Nav Styling
+            document.getElementById("nav-overview").classList.remove("active-nav", "text-white");
+            document.getElementById("nav-overview").classList.add("text-slate-400");
+            document.getElementById("nav-students").classList.add("active-nav", "text-white");
+
+            // Switch Sections
+            document.getElementById("graphicsSection").classList.add("hidden");
+            document.getElementById("feeTableSection").classList.add("hidden");
+            document.getElementById("filterToolbar").classList.add("hidden");
+
+            document.getElementById("studentTableSection").classList.remove("hidden");
+            document.getElementById("studentToolbar").classList.remove("hidden");
+
+            document.getElementById("pageTitle").innerText = "Student Management";
+            document.getElementById("pageSub").innerText = "Review and filter registered accounts by department.";
+
+            const res = await fetch("/admin/all-students");
+            const students = await res.json();
+            const body = document.getElementById("studentsBody");
+
+            body.innerHTML = students.map(s => `
+                <tr class="hover:bg-slate-50/50 transition" data-dept="${s.department}">
+                    <td class="px-8 py-5 font-bold text-slate-800">${s.name}</td>
+                    <td class="px-8 py-5 font-mono text-xs text-slate-500">${s.username}</td>
+                    <td class="px-8 py-5 text-sm text-indigo-600 font-semibold">${s.department}</td>
+                    <td class="px-8 py-5 text-right">
+                        <button onclick="removeStudent(${s.id})" class="text-rose-500 hover:bg-rose-50 px-4 py-2 rounded-xl text-xs font-bold transition border border-rose-100">
+                            Delete Account
+                        </button>
+                    </td>
+                </tr>
+            `).join('');
+            lucide.createIcons();
+        }
+
+        async function removeStudent(id) {
+            if (!confirm("Delete account permanently?")) return;
+            const res = await fetch(`/admin/remove-student/${id}`, { method: "DELETE" });
+            if (res.ok) { showAllStudents(); updateCharts(); }
+        }
+
+        document.addEventListener('DOMContentLoaded', () => {
+            updateCharts();
+            lucide.createIcons();
+        });
+    </script>
+</body>
+</html>
